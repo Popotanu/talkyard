@@ -22,10 +22,28 @@ import java.{util => ju}
 import scala.collection.immutable
 
 
+/**
+  * @param postAfter — if the moderation decision affected the post, e.g. now
+  *  it's approved and un-hidden, or got deleted.
+  * @param authorAfter — if the mod decision affected the post *author*,
+  *  e.g. hens [[ThreatLevel]] changed.
+  */
+case class ModResult(
+  updatedPosts: Seq[Post],
+  updatedAuthor: Option[Participant],
+  updatedPageId: Option[PageId] = None,
+  deletedPageId: Option[PageId] = None)
+
+object ModResult {
+  val NothingChanged = ModResult(Nil, None, None, None)
+}
+
+
 case class ReviewTaskCounts(numUrgent: Int, numOther: Int)
 
 
-sealed abstract class ReviewDecision(val IntVal: Int) {
+sealed abstract class ReviewDecision(val IntVal: Int) {  // RENAME to ModDecision
+                                // (else confusing with  approve-before and *review*-after)
   def toInt: Int = IntVal
   def isFine: Boolean = IntVal <= ReviewDecision.LastAcceptId
   def isRejectionBadUser: Boolean = IntVal >= ReviewDecision.FirstBadId
@@ -41,6 +59,23 @@ object ReviewDecision {
 
   // 1nnn = Accept
   case object Accept extends ReviewDecision(1001)
+
+  // AcceptNewPost
+  // AcceptEdits
+
+  //case object CascadeAccepted extends ReviewDecision(1011)
+
+  /** If staff edits a new post, but doesn't delete it — let's handle that
+    * as accepting it as okeay. But remember this was via an edit,
+    * a bit more informal than clicking Accept on the Moderation page.
+    */
+  case object InteractEdit extends ReviewDecision(1051)
+
+  /** New post accepted by replying and talking with the person. */
+  case object InteractReply extends ReviewDecision(1052)
+
+
+
   private val LastAcceptId = 1999
 
   // 3nnn = Request changes.
@@ -50,8 +85,15 @@ object ReviewDecision {
   private val FirstBadId = 5000
   case object DeletePostOrPage extends ReviewDecision(5001)
 
+  // Better:
+  // RejectDeleteNewPost  — post nr shows if is whole page (nr == BodyNr)
+  // RejectEdits
+
+
   def fromInt(value: Int): Option[ReviewDecision] = Some(value match {
     case ReviewDecision.Accept.IntVal => ReviewDecision.Accept
+    case ReviewDecision.InteractEdit.IntVal => ReviewDecision.InteractEdit
+    case ReviewDecision.InteractReply.IntVal => ReviewDecision.InteractReply
     case ReviewDecision.DeletePostOrPage.IntVal => ReviewDecision.DeletePostOrPage
     case _ => return None
   })
@@ -85,7 +127,8 @@ object ReviewDecision {
   * @param pageId A new page that should be reviewed.
   * @param postId A post that should be reviewed, it might be spam for example.
   */
-case class ReviewTask(
+case class ReviewTask(  //  RENAME to ModTask
+                        // (else confusing with  approve-before and *review*-after)
   id: ReviewTaskId,
   reasons: immutable.Seq[ReviewReason],
   createdById: UserId,
@@ -113,6 +156,13 @@ case class ReviewTask(
   //   member flags it (they can see deleted posts) — then, a review reason gets added
   //   to the review task, when it is already invalidated.
 
+  /* Forgot!: SHOULD find a way to add back? & "feat flag"? [more_runtime_assertions]
+  require(decidedAt.isDefined == isDecided, "TyE62KTID46")
+  require(decidedAtRevNr.isDefined == isDecided, "TyE62KTID46")
+  require(decidedById.isDefined == isDecided, "TyE62KTID46")
+  */
+
+
   require(reasons.nonEmpty, s"Review reasons is empty [TyE3FK21]: $this")
   require(!moreReasonsAt.exists(_.getTime < createdAt.getTime), "EsE7UGYP2")
   //require(moreReasonsAt.isDefined == moreReasonsAtRevNr.isDefined, "TyE6MKWZ8") [MOREREVRSNS]
@@ -131,6 +181,15 @@ case class ReviewTask(
   require(postId.isEmpty || (
       decidedAt.isDefined || completedAt.isDefined) == decidedAtRevNr.isDefined, "EsE4PU2")
 
+
+  /** If a staff member has decided what to do. However there's an undo timeout
+    * — not until after that, will the decision get carried out (so doneOrGone
+    * becomes true).
+    */
+  def isDecided: Boolean = decision.isDefined
+  def isDecidedButNotBy(ppId: UserId): Boolean = isDecided && decidedById.isNot(ppId)
+  def gotInvalidated: Boolean = invalidatedAt.isDefined
+  def isDone: Boolean = completedAt.isDefined
 
   /** If the review decision has been carried out, or if the review task became obsolete. */
   def doneOrGone: Boolean = completedAt.isDefined || invalidatedAt.isDefined

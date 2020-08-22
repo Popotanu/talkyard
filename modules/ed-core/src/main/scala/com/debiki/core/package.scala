@@ -87,6 +87,8 @@ package object core {
 
   type NotificationId = Int
 
+  type ModDecision = ReviewDecision
+  type ModTask = ReviewTask // renaming
   type ReviewTaskId = Int
 
   type PermissionId = Int
@@ -360,6 +362,7 @@ package object core {
     def idCookie: Option[String] = browserIdData.idCookie
     def browserFingerprint: Int = browserIdData.fingerprint
     def isGuest: Boolean = Participant.isGuestId(id)
+    def isSystem: Boolean = id == SystemUserId
   }
 
   object Who {
@@ -1215,6 +1218,7 @@ package object core {
   def AUDIT_LOG = ()      // Should add audit log entry
   def REFACTOR = ()       // The code can be refactored. Also search for "[refactor]".
   def RENAME = ()         // Something ought to be renamed.
+  def MOVE = ()
   def QUICK = ()          // Let's do now soon — won't take long.
   def OPTIMIZE = ()
   def SLOW_QUERY = ()

@@ -302,6 +302,13 @@ class Globals(  // RENAME to TyApp? or AppContext? TyAppContext? variable name =
     state.mailerActorRef ! (email, siteId)
   }
 
+  def sendEmails(emails: Iterable[Email], siteId: SiteId): Unit = {
+    COULD_OPTIMIZE // send just one message with all emails to send.
+    emails foreach { email =>
+      sendEmail(email, siteId)
+    }
+  }
+
   def endToEndTestMailer: ActorRef = state.mailerActorRef
   def spamCheckActor: Option[ActorRef] = state.spamCheckActorRef
 
@@ -623,6 +630,12 @@ class Globals(  // RENAME to TyApp? or AppContext? TyAppContext? variable name =
   def originOfSiteId(siteId: SiteId): Option[String] =
     systemDao.getSiteById(siteId).flatMap(_.canonicalHostname.map(originOf))
 
+  def theHostnameOf(site: Site): String =
+    site.canonicalHostnameStr getOrElse siteByPubIdHostnamePort(site.pubId)
+
+  def theOriginOf(site: Site): String =
+    originOf(site) getOrElse siteByPubIdOrigin(site.pubId)
+
   def originOf(site: Site): Option[String] = site.canonicalHostname.map(originOf)
   def originOf(host: Hostname): String = originOf(host.hostname)
   def originOf(hostOrHostname: String): String = {
@@ -658,11 +671,17 @@ class Globals(  // RENAME to TyApp? or AppContext? TyAppContext? variable name =
 
   def SiteByIdHostnamePrefix = "site-"
 
+  def siteByPubIdOrigin(pubId: PubSiteId): String =
+    s"$scheme://${siteByPubIdHostnamePort(pubId)}"
+
   def siteByIdOrigin(siteId: SiteId): String =
-    s"$scheme://${siteByIdHostname(siteId)}"
+    s"$scheme://${siteByIdHostname(siteId)}"  // port?
 
   def siteByIdHostname(siteId: SiteId): String =
     s"$SiteByIdHostnamePrefix$siteId.$baseDomainWithPort"
+
+  def siteByPubIdHostnamePort(pubId: PubSiteId): String =
+    s"$SiteByIdHostnamePrefix$pubId.$baseDomainWithPort"
 
 
   def pubSub: PubSubApi = state.pubSub

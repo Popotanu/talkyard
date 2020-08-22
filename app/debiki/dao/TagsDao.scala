@@ -127,6 +127,7 @@ trait TagsDao {
       tx.updatePageMeta(pageMeta.copyWithNewVersion, oldMeta = pageMeta,
           markSectionPageStale = false)
 
+      // [notfs_bug] Delete for removed tags — also if notf email already sent?
       val notifications = notfGenerator(tx).generateForTags(post, tagsToAdd)
       tx.saveDeleteNotifications(notifications)
 

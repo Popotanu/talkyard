@@ -228,7 +228,7 @@ ReactDispatcher.register(function(payload) {
       _.each(action.pageIds, id => {
         const page: Page = store.pagesById[id];
         if (page) {
-          page.pageDeletedAtMs = 1; // for now
+          page.pageDeletedAtMs = 1; // for now,  also at: [206KDH35R]
         }
       });
       break;
@@ -1443,6 +1443,13 @@ function patchTheStore(storePatch: StorePatch) {
     store.pageMetaBriefById[pageMeta.pageId] = pageMeta;
   });
 
+  _.each(storePatch.deletePageIds || [], (id: PageId) => {
+    const page: Page = store.pagesById[id];
+    if (page) {
+      page.pageDeletedAtMs = 1; // for now,  also at: [206KDH35R]
+    }
+  });
+
   const currentPage: Page = store.currentPage;
 
   // If we just posted the very first reply on an embedded discussion, a page for the discussion
@@ -1655,7 +1662,7 @@ function showNewPage(newPage: Page, newPublicCategories: Category[], newUsers: B
     }
     else {
       correctedUrl = pagePath + location.search + location.hash;
-      history.replace(correctedUrl);  // [4DKWWY0]
+      history.replace(correctedUrl);  // [4DKWWY0]  TyTE2EPGID2SLUG
     }
   }
 

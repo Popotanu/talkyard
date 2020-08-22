@@ -40,6 +40,7 @@ export const Notification = createComponent({
       case NotificationType.Message: iconClass = 'icon-mail-empty'; break;
       case NotificationType.NewPost: iconClass = 'icon-comment-empty'; toMeClass = ''; break;
       case NotificationType.PostTagged: iconClass = 'icon-tag'; toMeClass = ''; break;
+      case NotificationType.OneLikeVote: iconClass = 'icon-heart'; break;
       default: die("Unknown notification type [EsE4GUF2]")
     }
     var when;
