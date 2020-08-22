@@ -30,7 +30,7 @@ import talkyard.server.dao._
 
 /** Review stuff: a ReviewTask and the users and posts it refers to.
   */
-case class ReviewStuff(
+case class ReviewStuff(   // RENAME to  ModTaskStuff
   id: ReviewTaskId,
   reasons: immutable.Seq[ReviewReason],
   createdAt: ju.Date,
@@ -50,7 +50,7 @@ case class ReviewStuff(
 
 
 
-trait ReviewsDao {
+trait ReviewsDao {   // RENAME to ModerationDao,  MOVE to  talkyard.server.modn
   self: SiteDao =>
 
 
@@ -60,9 +60,9 @@ trait ReviewsDao {
     */
   def makeReviewDecisionIfAuthz(taskId: ReviewTaskId, requester: Who, anyRevNr: Option[Int],
         decision: ReviewDecision): Unit = {
-    readWriteTransaction { tx =>
-      val task = tx.loadReviewTask(taskId) getOrElse
-        throwNotFound("EsE7YMKR25", s"Review task not found, id $taskId")
+    writeTx { (tx, _) =>
+      val task = tx.loadReviewTask(taskId) getOrElse throwNotFound(
+            "EsE7YMKR25", s"Review task not found, id $taskId")
 
       throwIfMayNotSeeReviewTaskUseCache(task, requester)
 
@@ -71,10 +71,13 @@ trait ReviewsDao {
       if (task.doneOrGone)
         return
 
-      // The post might have been moved to a different page, so reload it.
+      // The post might have been moved to a different page, so load it by
+      // post id (not original page id and post nr).
       val anyPost = task.postId.flatMap(tx.loadPost)
       val pageId = anyPost.map(_.pageId)
 
+      // This should overwrite any old decision, during the undo timeout,
+      // until doneOrGone true above.
       val taskWithDecision = task.copy(
         decidedAt = Some(globals.now().toJavaDate),
         decision = Some(decision),
@@ -99,18 +102,24 @@ trait ReviewsDao {
   }
 
 
+
   def tryUndoReviewDecisionIfAuthz(reviewTaskId: ReviewTaskId, requester: Who): Boolean = {
-    readWriteTransaction { tx =>
-      val task = tx.loadReviewTask(reviewTaskId) getOrElse
-        throwNotFound("TyE48YM4X7", s"Review task not found, id $reviewTaskId")
+    writeTx { (tx, _) =>
+      val task = tx.loadReviewTask(reviewTaskId) getOrElse throwNotFound(
+            "TyE48YM4X7", s"Review task not found, id $reviewTaskId")
 
       throwIfMayNotSeeReviewTaskUseCache(task, requester)
 
-      if (task.completedAt.isDefined)
+      if (task.isDone) {
+        // There's a race between the human and the undo timeout, that's fine,
+        // don't throw any error.
         return false
+      }
 
-      // Don't: if (task-invalidated) return false — instead, undo anyway: maybe later some day,
-      // tasks can become active again. Then better have this task in an undone state.
+      if (task.gotInvalidated) {
+        // Proceed, undo the decision — will have no effect though.
+        // Maybe later some day, mod tasks can become active again (un-invalidated).
+      }
 
       throwBadRequestIf(task.decidedAt.isEmpty,
         "TyE5GKQRT2", s"Review action not decided. Task id $reviewTaskId")
@@ -144,15 +153,17 @@ trait ReviewsDao {
   }
 
 
+
   def carryOutReviewDecision(taskId: ReviewTaskId): Unit = {
-    val pageIdsToRefresh = mutable.Set[PageId]()
+    val pageIdsToRefresh = mutable.Set[PageId]()  ; REMOVE ; CLEAN_UP // use [staleStuff]
 
     writeTx { (tx, staleStuff) =>
       val anyTask = tx.loadReviewTask(taskId)
+      // Not found here is a server bug — we're not handling an end user request.
       val task = anyTask.getOrDie("EsE8YM42", s"s$siteId: Review task $taskId not found")
       task.pageId.map(pageIdsToRefresh.add)
 
-      if (task.invalidatedAt.isDefined) {
+      if (task.gotInvalidated) {
         // This can happen if many users flag a post, and one or different moderators click Delete,
         // for each flag. Then many delete decisions get enqueued, for the same post
         // — and when the first delete decision gets carried out, the other review tasks
@@ -161,81 +172,429 @@ trait ReviewsDao {
         return
       }
 
-      // Only one thread completes review tasks, so shouldn't be any races. [5YMBWQT]
-      dieIf(task.completedAt.isDefined, "TyE2A2PUM6", "Review task already completed")
+      if (task.isDone) {
+        // Fine, need do nothing.
+        // (There's a race: 1) The janitor actor completes review tasks, [5YMBWQT]
+        // and 2) there're in page instant Approve and Reject buttons [in_pg_apr])
+        return
+      }
+
       val decision = task.decision getOrDie "TyE4ZK5QL"
       val decidedById = task.decidedById getOrDie "TyE2A2PUM01"
       dieIf(task.decidedAtRevNr.isEmpty, "TyE2A2PUM02")
 
-      val completedTask = task.copy(completedAt = Some(globals.now().toJavaDate))
-      tx.upsertReviewTask(completedTask)
-
       dieIf(task.postNr.isEmpty, "Only posts can be reviewed right now [EsE7YGK29]")
 
-      task.postNr foreach { postNr =>
-        val post = tx.loadPost(task.postId getOrDie "EsE5YGK02") getOrElse {
+      val post = tx.loadPost(task.postId getOrDie "EsE5YGK02") getOrElse {
           logger.warn(s"s$siteId: Review task $taskId: Post ${task.postId} gone, why? [TyE5KQIBQ2]")
           return
         }
+      doModTaskNow(post, Seq(task), decision, decidedById = decidedById
+              )(tx, staleStuff, pageIdsToRefresh)
 
+      refreshPagesInAnyCache(pageIdsToRefresh)
+    }
+  }
+
+
+
+  /** When on a page, and looking at / reading the post — then, if one
+    * approves it, that happens instantly, no undo timeout.
+    * Because here one needs to click twice (once to confirm),
+    * but on the Moderation staff page, there's no Confirm (that'd been
+    * annoying? Because then one might confirms so many things
+    * quickly in a row. Then, Undo better?)
+    */
+  def moderatePostInstantly(postId: PostId, postRevNr: PostRevNr,
+          decision: ReviewDecision, moderator: Participant): ModResult = {
+
+    TESTS_MISSING
+    dieIf(!moderator.isStaff, "TyE5KRDL356")
+    // More authz in the tx below.
+
+    dieIf(decision != ReviewDecision.Accept
+          && decision != ReviewDecision.DeletePostOrPage, "TYE06SAKHJ34",
+          s"Unexpected moderatePostInstantly() decision: $decision")
+
+    val modResult = writeTx { (tx, staleStuff) =>
+      val post = tx.loadPost(postId).get
+      throwIfMayNotSeePost(post, Some(moderator))(tx: SiteTransaction)
+
+      val allTasks = tx.loadReviewTasksAboutPostIds(Seq(post.id))
+      val tasksToDecide = allTasks.filter(task =>
+            !task.doneOrGone &&
+            // COULD skip this decision, if it's one's own, and
+            // task.postRevNr > postRevNr here.
+            // And use the other already decided task (with isDecided true)
+            // instead. [skip_decided_mod_tasks]
+            !task.isDecidedButNotBy(moderator.id) &&
+            // It's for a revision of the post this staff member has seen.
+            task.createdAtRevNr.exists(_ <= post.currentRevisionNr))
+
+      BUG // if first rejecting a new page, then the *page* gets delted  [62AKDN46]
+      // — but the orig post isn't updated. Then, if undeleting the page,  [undel_posts]
+      // the Approve and Reject buttons reappear — since the orig post
+      // was never updated; it's still waiting-for-approval.
+      // But now, if clicking the text Approve Page, the below error will happen.
+      // Solve this, by changing  approvedAt  to  approvedStatus: -1, 0, 1,
+      // where -1 means Rejected, +1 means Approved, and 0  (or Null in Postgres)
+      // means  waiting-for-approval.  Then, this field can be updated,
+      // independently of the page's and post's deleted status.
+      //
+      throwForbiddenIf(tasksToDecide.isEmpty, "TyE06RKDHN24",
+            // (BUG UX harmless: This message is wrong, if
+            // task.createdAtRevNr < ... above.)
+            "This mod task already decided, maybe by someone else?")
+
+      doModTaskNow(post, tasksToDecide, decision, decidedById = moderator.id
+            )(tx, staleStuff,
+              mutable.Set.empty) // REMOVE use [staleStuff] instead
+    }
+
+    modResult
+  }
+
+
+
+  /** Implicitly accepts posts as okay, by interacting with them, e.g. replying or
+    * editing them. So mods won't need to both read and reply, and also
+    * read again and mark as ok in the admin area.  [appr_by_interact]
+    *
+    * This happens only if the post has been (auto) approved already.
+    * Approving-before-publish needs to be done explicitly — see
+    * [[moderatePostInstantly()]] above.
+    *
+    * @param decision should be type:  InteractReply.type | InteractEdit.type
+    *                  but won't work until [Scala_3].
+    */
+  def maybeReviewAcceptPostByInteracting(post: Post, moderator: Participant,
+          decision: ReviewDecision)(tx: SiteTx, staleStuff: StaleStuff): Unit = {
+
+    TESTS_MISSING
+    dieIf(!moderator.isStaff, "TyE5KRDL356")
+
+    // Skip not-yet-approved posts. Approve-before is more explicit — an
+    // in page button to click. [in_pg_apr]
+    if (!post.isSomeVersionApproved)
+      return
+
+    // Skip access control — we're interacting with the post already,
+    // checks done already. And we do Not return and show any modified post
+    // from here. (025AKDL)
+    // throwIfMayNotSeePost(task, requester)  <—— not needed
+
+    dieIf(decision != ReviewDecision.InteractEdit
+          && decision != ReviewDecision.InteractReply, "TyE50RKT25M",
+          s"Unsupported maybeAcceptPostByInteracting decision: $decision")
+
+    val allTasks = tx.loadReviewTasksAboutPostIds(Seq(post.id))
+    val tasksToAccept = allTasks.filter(task =>
+          !task.doneOrGone &&
+          // If another mod (or this moderator henself) just did a mod task
+          // decision via the moderation page, then, don't change that decision.
+          // (Happens if this interaction happens within the mod task undo timeout.)
+          // [skip_decided_mod_tasks]
+          !task.isDecided &&
+          // If other people in the forum reacted to this post, don't accept it
+          // implicitly here? Instead, leave the mod task for more explicit
+          // consideration on the Moderation page.
+          !task.reasons.exists(_.isUnpopular) &&
+          // Skip mod tasks about post revisions the staff member hasn't
+          // seen (e.g. a just about now edited and flagged new revision).
+          // Maybe this has no effect — seems the calle loads the most recent
+          // version of `post` always. Oh well. Barely matters.
+          task.createdAtRevNr.exists(_ <= post.currentRevisionNr))
+
+    reviewAccceptPost(post, tasksToAccept, decision, decidedById = moderator.id
+          )(tx, staleStuff)
+
+    /* rm this comment
+    tasksToAccept foreach { task =>
+      if (task.decision.isDefined || task.decidedById.isDefined ||
+            task.decidedAtRevNr.isDefined || task.decidedAt.isDefined ||
+            task.completedAt.isDefined) {
+        bugWarn("TyE406RKDN3")
+        return
+      }
+
+      val now = Some(tx.now.toJavaDate)
+
+      val completedTask = task.copy(
+            decision = Some(decision),
+            decidedById = Some(staffMember.id),
+            decidedAtRevNr = Some(post.currentRevisionNr),
+            decidedAt = now,
+            completedAt = now)
+
+      // Do the same things as carryOutReviewDecision(() — but only with the
+      // mod task, don't change the post itself.
+      tx.upsertReviewTask(completedTask)
+      updateSpamCheckTasksBecauseReviewDecision(
+            humanSaysIsSpam = false, completedTask, tx)
+    } */
+
+    AUDIT_LOG // missing — here and most? other fns in this file.
+
+    // Don't return the now review-accepted post. (025AKDL)
+  }
+
+
+
+  private def doModTaskNow(post: Post, modTasks: Seq[ModTask],
+          decision: ModDecision, decidedById: UserId)
+          (tx: SiteTx, staleStuff: StaleStuff,
+              pageIdsToRefresh: mutable.Set[PageId])
+          : ModResult = {
+
+    modTasks foreach { t =>
+      dieIf(t.doneOrGone, "TyE50WKDL45", s"Mod task done or gone: $t")
+      dieIf(t.decision isSomethingButNot decision, "TyE305RKDHB",
+            s"Mod task decision != $decision, task: $t")
+      dieIf(t.postId isNot post.id, "TyE7KT35T64",
+            s"Mod task post id != post.id, task: $t")
+    }
+
+        /*
         // Currently review tasks don't always get invalidated, when posts and pages get deleted. (2KYF5A)
         if (post.deletedAt.isDefined) {
-          // Any spam check task should have been updated already, here: [UPDSPTSK].
-          return
-        }
+          BUG; SHOULD // update the task anyway! Otherwise if post deleted,
+          // there'll be some un-handleable mod tasks!
 
-        pageIdsToRefresh.add(post.pageId)
+          // Any spam check task should have been updated already, here: [UPDSPTSK].
+          return ModResult.NothingChanged
+        } */
+
+        // Remove? Only do if hidden or not yet approved? -----
+        pageIdsToRefresh.add(post.pageId) ; REMOVE  // [staleStuff]
+        staleStuff.addPageId(post.pageId)
+        // ----------------------------------------------------
+
+        /*  rm this
+        val newTitleApproved = post.isTitle && !post.isCurrentVersionApproved
+                // or?  !post.approvedRevisionNr.exists(_ >= decidedAtRevNr)
+        staleStuff.addPageId(post.pageId, backlinksStale = newTitleApproved)
+
+        // Can this happen?
+        task.pageId foreach { id =>
+          if (id != post.pageId) {
+            staleStuff.addPageId(id)
+          }
+        } */
 
         // We're in a background thread and have forgotten the browser id data.
         // Could to load it from an earlier audit log entry, ... but maybe it's been deleted?
-        // For now:
+        // Edit: But now this might as well be called from moderatePostInstantly().
+        // Oh well, not important. For now:
         val browserIdData = BrowserIdData.Forgotten
+
         decision match {
           case ReviewDecision.Accept =>
             if (post.isCurrentVersionApproved) {
+              reviewAccceptPost(post, tasksToAccept = modTasks, decision,
+                      decidedById = decidedById)(tx, staleStuff)
+            }
+            else {
+              approveAndPublishPost(post, decidedById = decidedById,
+                    tasksToAccept = modTasks, pageIdsToRefresh)(tx, staleStuff)
+            }
+          case ReviewDecision.DeletePostOrPage =>
+            rejectAndDeletePost(post, decidedById = decidedById, modTasks, browserIdData
+                  )(tx, staleStuff)
+          case x =>
+            unimpl(s"s$siteId: Cannot handle decision here: $decision [TyE306KD2")
+        }
+  }
+
+
+
+  private def reviewAccceptPost(post: Post, tasksToAccept: Seq[ModTask],
+          decision: ModDecision, decidedById: UserId)
+          (tx: SiteTx, staleStuff: StaleStuff): ModResult = {
+
+    dieIf(!decision.isFine, "TyE305RKDJW2")
+    dieIf(tasksToAccept.exists(_.decision isSomethingButNot decision), "TyE5E03SHP4")
+
+    if (post.isDeleted) {
+      // Continue anyway: Unhide the post body (see below), if hidden  [apr_deld_post]
+      // — good to do, if the post or page or whatever gets undeleted, later.
+      // (Maybe someone else just deleted the post, or deleted via
+      // another mod task.)
+    }
+
+    val updatedPost =
               // The System user has apparently approved the post already.
               // However, it might have been hidden a tiny bit later, after some  external services
               // said it's spam. Now, though, we know it's apparently not spam, so show it.
               if (post.isBodyHidden) {
                 // SPAM RACE COULD unhide only if rev nr that got hidden <=
                 // rev that was reviewed. [6GKC3U]
+
+                UX; TESTS_MISSING; BUG // ? will this un-hide the whole page if needed?
+
                 changePostStatusImpl(postNr = post.nr, pageId = post.pageId,
                       PostStatusAction.UnhidePost, userId = decidedById,
-                      doingReviewTask = Some(task), tx, staleStuff)
+                      tx, staleStuff).updatedPost
               }
-            }
-            else {
-              if (task.isForBothTitleAndBody) {
+              else {
+                None
+              }
+
+    markModTasksCompleted(post, tasksToAccept, decision, decidedById = decidedById
+          )(tx, staleStuff)
+
+    ModResult(
+          updatedPosts = updatedPost.toSeq,
+          updatedAuthor = None)
+  }
+
+
+
+  private def approveAndPublishPost(post: Post, decidedById: UserId,
+        tasksToAccept: Seq[ModTask], pageIdsToRefresh: mutable.Set[PageId])
+        (tx: SiteTx, staleStuff: StaleStuff): ModResult = {
+
+    dieIf(tasksToAccept.isEmpty, "TyE306RKTD5")
+
+    val taskIsForBothTitleAndBody = tasksToAccept.head.isForBothTitleAndBody
+
+    dieIf(post.nr == BodyNr && !taskIsForBothTitleAndBody, "TyE603RKJG3")
+
+    dieIf(tasksToAccept.exists(_.postId isNot post.id), "TyE60KJFHE4")
+    // But the post nr might be different — if the post got moved elsewhere.
+
+    dieIf(tasksToAccept.tail.exists(_.isForBothTitleAndBody != taskIsForBothTitleAndBody),
+        "TyE603AKDHHW26")
+
+    if (post.isDeleted) {
+      // Approve the post anyway  [apr_deld_post] — maybe gets undeleted
+      // later, then good to remember it got approved.
+    }
+
+    val updatedTitle =
+              if (taskIsForBothTitleAndBody) {
                 // This is for a new page. Approve the *title* here, and the *body* just below.
+
+                // Maybe skip this check? In case a post gets broken out to a new page,
+                // or merged into an existing page.
+                dieIfAny(tasksToAccept, (t: ReviewTask) => t.postNr.isNot(PageParts.BodyNr),
+                      "TyE306RKDH3" ) /*
                 dieIf(!task.postNr.contains(PageParts.BodyNr), "EsE5TK0I2")
-                approvePostImpl(post.pageId, PageParts.TitleNr, approverId = decidedById,
-                      tx, staleStuff)
+                */
+                approvePost(post.pageId, PageParts.TitleNr, approverId = decidedById,
+                      doingModTasks = tasksToAccept, tx, staleStuff).updatedPost
               }
-              approvePostImpl(post.pageId, post.nr, approverId = decidedById, tx, staleStuff)
-              perhapsCascadeApproval(post.createdById, pageIdsToRefresh)(tx, staleStuff)
+              else {
+                // Then need not approve any title.
+                None
+              }
+
+    val updatedBody =
+              approvePost(post.pageId, post.nr, approverId = decidedById,
+                  doingModTasks = tasksToAccept, tx, staleStuff)
+                  .updatedPost
+
+    if (!post.isDeleted) {
+      perhapsCascadeApproval(post.createdById, pageIdsToRefresh)(tx, staleStuff)
+    }
+
+    markModTasksCompleted(post, tasksToAccept, ReviewDecision.Accept,
+          decidedById = decidedById)(tx, staleStuff)
+
+    ModResult(
+          updatedPosts = updatedBody.toSeq ++ updatedTitle,
+          updatedAuthor = None)
+  }
+
+
+
+  private def rejectAndDeletePost(post: Post, decidedById: UserId, modTasks: Seq[ModTask],
+        browserIdData: BrowserIdData)
+        (tx: SiteTx, staleStuff: StaleStuff): ModResult = {
+
+    // For now:
+    val taskIsForBothTitleAndBody = modTasks.head.isForBothTitleAndBody
+    dieIf(modTasks.exists(_.postId isSomethingButNot post.id), "TyE50WKDL6")
+
+    // Maybe got moved to an new page?
+    val pageId = post.pageId
+
+    val (updatedPosts, deletedPageId)  =
+            if (post.isDeleted) {
+              // Fine, just update the mod tasks. [apr_deld_post]
+              // (There're races: mods reviewing and deleting, and others maybe
+              // deleting the post or ancestor posts — fine.)
+              (Nil, None)
             }
-            updateSpamCheckTasksBecauseReviewDecision(humanSaysIsSpam = false, task, tx)
-          case ReviewDecision.DeletePostOrPage =>
             // If staff deletes many posts by this user, mark it as a moderate threat?
             // That'll be done from inside update-because-deleted fn below. [DETCTHR]
-            if (task.isForBothTitleAndBody) {
-              val pageId = task.pageId getOrDie "TyE4K85R2"
+            else if (taskIsForBothTitleAndBody) {
               deletePagesImpl(Seq(pageId), deleterId = decidedById,
-                    browserIdData, doingReviewTask = Some(task))(tx, staleStuff)
+                    browserIdData,
+                    )(tx, staleStuff)
+              // Posts not individually deleted, instead, whole page gone // [62AKDN46]
+              (Seq.empty, Some(pageId))
             }
             else {
-              deletePostImpl(post.pageId, postNr = post.nr, deletedById = decidedById,
-                    doingReviewTask = Some(task), browserIdData, tx, staleStuff)
+              val updPost =
+                    deletePostImpl(post.pageId, postNr = post.nr, deletedById = decidedById,
+                        browserIdData, tx, staleStuff)
+                      .updatedPost
+
+              // It's annoying if [other review tasks for the same post] would
+              // need to be handled too.
+              UX; COULD // do this also if deleting the whole page? (see above)
+              // what!  done just below already:? markModTasksCompleted()
+              invalidateReviewTasksForPosts(Seq(post), doingTasksNow = modTasks, tx)
+
+              (updPost.toSeq, None)
             }
             // Need not:
             // updateSpamCheckTasksBecauseReviewDecision(humanSaysIsSpam = true, task, tx)
             // — that's done from the delete functions already. [UPDSPTSK]
-        }
+
+    markModTasksCompleted(post, modTasks, ReviewDecision.DeletePostOrPage,
+          decidedById = decidedById)(tx, staleStuff)
+
+    ModResult(
+          updatedPosts = updatedPosts,
+          updatedAuthor = None,
+          updatedPageId = deletedPageId,
+          deletedPageId = deletedPageId)
+  }
+
+
+
+  private def markModTasksCompleted(post: Post, tasks: Seq[ModTask],
+        decision: ModDecision, decidedById: UserId)
+        (tx: SiteTx, staleStuff: StaleStuff): Unit = {
+
+    val tasksToUpdate = tasks.filter(!_.doneOrGone)
+
+    tasksToUpdate foreach { task =>
+      if (bugWarnIf(task.decision isSomethingButNot decision, "TyE50KSD2")) return
+      if (bugWarnIf(task.postId isNot post.id, "TyE06FKSD2")) return
+      if (bugWarnIf(task.doneOrGone, "TyE7KTJ25")) return
+
+      val now = Some(tx.now.toJavaDate)
+
+      val completedTask =
+            if (task.isDecided) task.copy(completedAt = now)
+            else task.copy(
+                  decision = Some(decision),
+                  decidedById = Some(decidedById),
+                  decidedAtRevNr = Some(post.currentRevisionNr),
+                  decidedAt = now,
+                  completedAt = now)
+
+      tx.upsertReviewTask(completedTask)
+
+      if (decision.isFine) {
+        updateSpamCheckTasksBecauseReviewDecision(
+              humanSaysIsSpam = false, completedTask, tx)
       }
     }
-
-    refreshPagesInAnyCache(pageIdsToRefresh)
   }
+
 
 
   private def updateSpamCheckTasksBecauseReviewDecision(humanSaysIsSpam: Boolean,
@@ -322,7 +681,7 @@ trait ReviewsDao {
     * the user that much.
     *
     */
-  @deprecated("remove this, too complicated")
+  @deprecated("remove this, too complicated") // more nice to approve by interacting? [appr_by_interact]
   private def perhapsCascadeApproval(userId: UserId, pageIdsToRefresh: mutable.Set[PageId])(
         tx: SiteTransaction, staleStuff: StaleStuff): Unit = {
     val settings = loadWholeSiteSettings(tx)
@@ -397,21 +756,22 @@ trait ReviewsDao {
   }
 
 
-  def invalidateReviewTasksForPosts(posts: Iterable[Post], doingReviewTask: Option[ReviewTask],
+  private def invalidateReviewTasksForPosts(posts: Iterable[Post], doingTasksNow: Seq[ModTask],
         tx: SiteTransaction): Unit = {
-    invalidatedReviewTasksImpl(posts, shallBeInvalidated = true, doingReviewTask, tx)
+    invalidatedReviewTasksImpl(posts, shallBeInvalidated = true, doingTasksNow, tx)
   }
 
 
-  def reactivateReviewTasksForPosts(posts: Iterable[Post], doingReviewTask: Option[ReviewTask],
+  private def reactivateReviewTasksForPosts(posts: Iterable[Post], doingTasksNow: Seq[ModTask],
          tx: SiteTransaction): Unit = {
     TESTS_MISSING // [UNDELPOST]
     untestedIf(posts.nonEmpty, "TyE2KIFW4", "Reactivating review tasks for undeleted posts") // [2VSP5Q8]
-    invalidatedReviewTasksImpl(posts, shallBeInvalidated = false, doingReviewTask, tx)
+    invalidatedReviewTasksImpl(posts, shallBeInvalidated = false, doingTasksNow, tx)
   }
 
 
-  CLEAN_UP; DO_AFTER /* 2018-10-01  [5RW2GR8]  After rethinking reviews, maybe better to never
+  /*  [deld_post_mod_tasks]
+  After rethinking reviews, maybe better to never
   invalidate any reveiw tasks, when a page / post gets deleted, via *not* the review interface?
   So staff will see everything that gets flagged — even if someone deleted it first
   for whatever reason.
@@ -431,7 +791,7 @@ trait ReviewsDao {
 
 
   private def invalidatedReviewTasksImpl(posts: Iterable[Post], shallBeInvalidated: Boolean,
-        doingReviewTask: Option[ReviewTask], tx: SiteTransaction): Unit = {
+        doingTasksNow: Seq[ModTask], tx: SiteTransaction): Unit = {
 
     // If bug then:
     // If somehow some day a review task doesn't get properly invalidated, and
@@ -447,7 +807,7 @@ trait ReviewsDao {
       def postDeleted = anyPostForThisTask.exists(_.isDeleted)
       (task.completedAt.isDefined
         || task.invalidatedAt.isDefined == shallBeInvalidated  // already correct status
-        || doingReviewTask.exists(_.id == task.id)  // this task gets updated by some ancestor caller
+        || doingTasksNow.exists(_.id == task.id)  // this task gets updated by some ancestor caller
         || (isReactivating && postDeleted))  // if post gone, don't reactivate this task
     }
 

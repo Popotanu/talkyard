@@ -59,6 +59,11 @@ Rename "indie" to user" and "people" to "members"
 prevent usernames from being displayed in Unicode, if mixed charsets used,
 e.g. Latin + Cryllic = facebooĸ.com  (homograph attacks).
 
+[more_runtime_assertions]
+Figure out a way to safely add more runtime assertions — although sometimes
+I'll add *incorrect assertions* some of which will *break* and need to
+be disabled.
+
 [authn]
 What about adding U2F login?
 https://github.com/Yubico/java-webauthn-server/ — a Java U2F / WebAuthn lib.
@@ -70,6 +75,11 @@ Let people create accounts without specifying any email address. Like at Reddit.
 [reenable-akismet]:
 For some reason I disabled Akismet (why? when refactoring to save time?). Enable it again.
 
+
+[undel_posts]:
+Undelete posts, not just pages and categories.
+And make it possible to change from  Rejected —> Approved,
+and Approved —> Rejected,  unless got replies or Like votes already?
 
 [flat-comments]:
 Change layout of problem type topics to traditional forum flat comments layout.
@@ -316,12 +326,17 @@ LinkedIn likes oEmbed better than OpenGraph:
 (Commercial:  https://embed.ly  +  https://iframely.com,
 iframely = OSS too:  https://github.com/itteco/iframely/tree/master/plugins/domains )
 
-[like-notfs]
+[like-notfs]  [like_vote_notfs]
 Send notifications about getting a Like.
 
 [refactor-notfs]  DONE, except for re-enabling reconnect.
 Remove Nchan. Use Rust + server-sent-events instead.  NO, just Play and WebSocket now.
 
+[notf_schedule][snooze_schedule]
+Individual prefs:
+  Configure when auto-snoozing — e.g. weekends and before & after 0900-1700.
+  Get someone's-waiting-for-approval notfs, if been waiting for > X hours.
+  Or optionally if new member joins.
 
 [external-server-js]
 What? Same as [ext_markup_processor] ?

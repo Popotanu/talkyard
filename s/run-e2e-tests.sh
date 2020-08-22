@@ -368,6 +368,7 @@ function runAllE2eTests {
   # embedded-comments-guest-login-email-notf-unsbscribe
   $r s/wdio --only unsubscribe.2browsers $args
   $r s/wdio --only notf-emails-discussion.2browsers $args
+  $r s/wdio --only notfs-like-votes.2browsers $args
   $r s/wdio --only notfs-mark-all-as-read.2browsers $args  # REANME append -manually
   $r s/wdio --only notfs-snooze-talk.2browsers $args
   $r s/wdio --only notf-override-group-prefs.2browsers $args

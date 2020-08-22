@@ -63,10 +63,11 @@ case class NotificationGenerator(
 
 
   def generateForNewPost(page: Page, newPost: Post, sourceAndHtml: Option[SourceAndHtml],
-        anyReviewTask: Option[ReviewTask],
+        anyNewModTask: Option[ModTask], doingModTasks: Seq[ModTask] = Nil,
         skipMentions: Boolean = false): Notifications = {
 
     require(page.id == newPost.pageId, "TyE74KEW9")
+    require(anyNewModTask.isEmpty || doingModTasks.isEmpty, "TyE056KWH5")
 
     if (newPost.isTitle)
       return generatedNotifications  // [no_title_notfs]
@@ -86,7 +87,7 @@ case class NotificationGenerator(
     if (page.meta.pageType == PageType.EmbeddedComments && newPost.isOrigPost)
       return generatedNotifications
 
-    if (anyReviewTask.isDefined) {
+    if (anyNewModTask.isDefined) {
       COULD // Move this to a new fn  generateForReviewTask()  instead? [revw_task_notfs]
 
       // Generate notifications to staff members, so they can review this post. Don't
@@ -101,7 +102,7 @@ case class NotificationGenerator(
           createdAt = newPost.createdAt,
           uniquePostId = newPost.id,
           byUserId = newPost.createdById,
-          toUserId = staffUser.id)
+          toUserId = staffUser.id)  // won't send normal notfs too?
       }
     }
 
@@ -109,7 +110,7 @@ case class NotificationGenerator(
       // This post hasn't yet been approved and isn't visible. Don't notify people
       // until later, when staff has reviewed it and made it visible.
       // We've notified staff already, above, so they can take a look.
-      dieIf(anyReviewTask.isEmpty, "TyE0REVTSK")  // [703RK2]
+      dieIf(anyNewModTask.isEmpty, "TyE0REVTSK")  // [703RK2]
       return generatedNotifications
     }
 
@@ -118,7 +119,8 @@ case class NotificationGenerator(
     // about e.g. a @mention of oneself, in the mentions list, also if one approved
     // that post, oneself.
     val oldNotfsToStaff = tx.loadNotificationsAboutPost(newPost.id, NotificationType.NewPostReviewTask)
-    avoidDuplEmailToUserIds ++= oldNotfsToStaff.map(_.toUserId)
+    avoidDuplEmailToUserIds ++= oldNotfsToStaff.map(_.toUserId)  ; BUG // doesn't work?
+          // sends me a 2nd email anywa
 
     anyAuthor = Some(tx.loadTheParticipant(newPost.createdById))
 
@@ -139,8 +141,9 @@ case class NotificationGenerator(
       // (If the replying-to-post is by a group (currently cannot happen), and someone in the group
       // replies to that group, then hen might get a notf about hens own reply. Fine, not much to
       // do about that.)
-      makeNewPostNotfs(
-          NotificationType.DirectReply, newPost, page.categoryId, replyingToUser)
+      makeAboutPostNotfs(
+            NotificationType.DirectReply, newPost, inCategoryId = page.categoryId,
+            replyingToUser)
     }
 
     // Later: Indirect reply notifications.
@@ -186,8 +189,9 @@ case class NotificationGenerator(
         // Authz checks that we won't notify people outside a private chat
         // about any mentions (because they cannot see the chat). [PRIVCHATNOTFS]
       } {
-        makeNewPostNotfs(
-            NotificationType.Mention, newPost, page.categoryId, userOrGroup)
+        makeAboutPostNotfs(
+            NotificationType.Mention, newPost, inCategoryId = page.categoryId,
+            userOrGroup)
       }
     }
 
@@ -326,17 +330,26 @@ case class NotificationGenerator(
     unimplementedIf(pageBody.approvedById.isEmpty, "Unapproved private message? [EsE7MKB3]")
     anyAuthor = Some(tx.loadTheParticipant(pageBody.createdById))
     tx.loadParticipants(toUserIds.filter(_ != sender.id)) foreach { user =>
-      makeNewPostNotfs(
+      makeAboutPostNotfs(
           // But what if is 2 ppl chat — then would want to incl 1st message instead.
-          NotificationType.Message, pageBody, categoryId = None, user)
+          NotificationType.Message, pageBody, inCategoryId = None, user)
     }
     generatedNotifications
   }
 
 
-  private def makeNewPostNotfs(notfType: NotificationType, newPost: Post,
-        categoryId: Option[CategoryId], toUserMaybeGroup: Participant,
+  private def makeAboutPostNotfs(
+        notfType: NotificationType,
+        post: Post,
+        inCategoryId: Option[CategoryId],
+        sendTo: Participant,
+        sentFrom: Option[Participant] = None, // default is post author
         minNotfLevel: NotfLevel = NotfLevel.Hushed): Unit = {
+
+    // legacy variable names CLEAN_UP but not now
+    val toUserMaybeGroup = sendTo
+    val newPost = post
+
     if (sentToUserIds.contains(toUserMaybeGroup.id))
       return
 
@@ -437,20 +450,20 @@ case class NotificationGenerator(
       COULD; NotfLevel.Hushed // Also consider the type of notf: is it a direct message? Then send
       // if >= Hushed. If is a subthread indirect reply? Then don't send if == Hushed.
 
-      val notfLevels = tx.loadPageNotfLevels(toUserId, newPost.pageId, categoryId)
+      val notfLevels = tx.loadPageNotfLevels(toUserId, newPost.pageId, inCategoryId)
       val usersMoreSpecificLevel =
         notfLevels.forPage.orElse(notfLevels.forCategory).orElse(notfLevels.forWholeSite)
       val shallNotify = usersMoreSpecificLevel isNot NotfLevel.Muted
       if (shallNotify) {
         sentToUserIds += toUserId
         notfsToCreate += Notification.NewPost(
-          notfType,
-          id = bumpAndGetNextNotfId(),
-          createdAt = newPost.createdAt,
-          uniquePostId = newPost.id,
-          byUserId = newPost.createdById,
-          toUserId = toUserId,
-          emailStatus = emailStatusFor(toUserId))
+              notfType,
+              id = bumpAndGetNextNotfId(),
+              createdAt = newPost.createdAt,
+              uniquePostId = newPost.id,
+              byUserId = sentFrom.map(_.id) getOrElse newPost.createdById,
+              toUserId = toUserId,
+              emailStatus = emailStatusFor(toUserId))
       }
     }
   }
@@ -656,10 +669,11 @@ case class NotificationGenerator(
 
     // Delete mentions.
     for (user <- mentionsDeletedForUsers) {
-      notfsToDelete += NotificationToDelete.MentionToDelete(
-        siteId = tx.siteId,
-        uniquePostId = newPost.id,
-        toUserId = user.id)
+      notfsToDelete += NotificationToDelete.ToOneMember(
+            siteId = tx.siteId,
+            uniquePostId = newPost.id,
+            toUserId = user.id,
+            NotificationType.Mention)
     }
 
     val pageMeta = tx.loadPageMeta(newPost.pageId)
@@ -671,9 +685,29 @@ case class NotificationGenerator(
     } {
       BUG // harmless. might mention people again, if previously mentioned directly,
       // and now again via a @group_mention. See REFACTOR above.
-      makeNewPostNotfs(
-          NotificationType.Mention, newPost, categoryId = pageMeta.flatMap(_.categoryId), user)
+      makeAboutPostNotfs(
+            NotificationType.Mention, newPost,
+            inCategoryId = pageMeta.flatMap(_.categoryId), user)
     }
+
+    generatedNotifications
+  }
+
+
+  def generateForLikeVote(post: Post, upvotedPostAuthor: Participant,
+          voter: Participant, inCategoryId: Option[CategoryId]): Notifications = {
+    if (upvotedPostAuthor.isGone || upvotedPostAuthor.isBuiltIn)
+      return generatedNotifications
+
+    if (upvotedPostAuthor.isGroup) {
+      // Not implemented. What'd make sense to do? Notify everyone in the group,
+      // or would that be too noisy?
+      return generatedNotifications
+    }
+
+    makeAboutPostNotfs(
+          NotificationType.OneLikeVote, post, inCategoryId = inCategoryId,
+          sendTo = upvotedPostAuthor, sentFrom = Some(voter))
 
     generatedNotifications
   }
@@ -690,8 +724,12 @@ case class NotificationGenerator(
       user <- usersToNotify
       if user.id != post.createdById
     } {
-      makeNewPostNotfs(
-          NotificationType.PostTagged, post, categoryId = pageMeta.flatMap(_.categoryId), user)
+      // This is about the new (from the notf recipient's point of view) post,
+      // so the notf is from the post author — also if someone else added the tag.
+      makeAboutPostNotfs(
+            NotificationType.PostTagged, post,
+            inCategoryId = pageMeta.flatMap(_.categoryId),
+            sendTo = user)
     }
     generatedNotifications
   }

@@ -32,6 +32,11 @@
   .icon-comment-empty:before
     font-weight: bold;
 
+ .icon-heart::before
+    position: relative;
+    top: 3px; // v-aligns inside background
+    vertical-align: middle;
+
   // Make stuff directly to me darker (e.g. direct replies, mentions).
   &.esNotf-toMe
     [class^=icon-],

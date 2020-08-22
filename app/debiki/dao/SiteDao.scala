@@ -195,6 +195,14 @@ class SiteDao(
   private def thisSiteCacheKey = siteCacheKey(this.siteId)
 
 
+  def writeTxTryReuse[R](anyStuff: Option[(SiteTx, StaleStuff)])(
+          fn: (SiteTransaction, StaleStuff) => R): R =
+    anyStuff match {
+      case Some((tx, staleStuff)) => fn(tx, staleStuff)
+      case None => writeTx(fn)
+    }
+
+
   def writeTx[R](fn: (SiteTransaction, StaleStuff) => R): R = {
     writeTx()(fn)
   }
@@ -221,6 +229,9 @@ class SiteDao(
 
     // Refresh in-memory cache:  [rm_cache_listeners]
     if (staleStuff.nonEmpty) {
+      staleStuff.staleParticipantIdsInMem foreach { ppId =>
+        removeUserFromMemCache(ppId)
+      }
       staleStuff.stalePageIdsInMem foreach { pageId =>
         refreshPageInMemCache(pageId)
       }

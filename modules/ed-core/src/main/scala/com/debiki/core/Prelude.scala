@@ -111,10 +111,13 @@ object Prelude {
   def unsupported(what: String, errorCode: String) =
     throw new UOE(s"$what [$errorCode]")
   def unimplemented = throw new UOE("Not implemented")
-  def unimplemented(what: String) = throw new UOE("Not implemented: "+ what)
+  def unimpl(what: String) = unimplemented(what)  // yes
+  def unimplemented(what: String) = throw new UOE("Not implemented: "+ what)  // too long!
   def unimplemented(what: String, errorCode: String) =
     throw new UOE(s"Not implemented: $what [$errorCode]")
-  def unimplementedIf(condition: Boolean, what: String): Unit =
+  def unimplIf(condition: Boolean, what: String): Unit =
+    if (condition) unimplemented(what)
+  def unimplementedIf(condition: Boolean, what: String): Unit =  // too long name CLEAN_UP rename to unimplIf
     if (condition) unimplemented(what)
 
   /** Useful code but currently not in use. Abort, so I'll notice, and test it again before

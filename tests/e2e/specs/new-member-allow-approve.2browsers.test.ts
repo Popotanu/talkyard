@@ -281,6 +281,8 @@ describe("new member, allow, approve posts:  TyT4AKBJ20", () => {  // RENAME ths
     owensBrowser.adminArea.review.waitForServerToCarryOutDecisions();
   });
 
+  // Maria gets a notf email!  TyTE2E062KR
+
   it("Then Michael sees that reply, but not any others", () => {
     michaelsBrowser.topic.refreshUntilPostNotPendingApproval(4);
   });
@@ -340,6 +342,9 @@ describe("new member, allow, approve posts:  TyT4AKBJ20", () => {  // RENAME ths
     michaelsBrowser.assertPageBodyMatches(topics.majasTopicTextEdited);
   });
 
+
+
+  // Maria gets notf emails!  TyTE2E062KR
 
   // Maja allowed
   // -------------------------------------

@@ -264,6 +264,16 @@ export class TyE2eTestBrowser {
       return url;
     }
 
+    waitUntilUrlIs(expectedUrl: S) {
+      let urlNow: S;
+      this.waitUntil(() => {
+        urlNow = this.getUrl();
+        return urlNow === expectedUrl;
+      }, {
+        message: () => `Waiting for url: ${expectedUrl}  currently: ${urlNow}`,
+      });
+    }
+
     /** @deprecated */
     getSource = () => this.#br.getPageSource();  // backw compat
 
@@ -5081,13 +5091,14 @@ export class TyE2eTestBrowser {
         this.topic.clickPostActionButton(`#post-${postNr} + .esPA .dw-a-votes`);
       },
 
-      makeLikeVoteSelector: (postNr: PostNr, ps: { byMe?: true } = {}): string => {
+      makeLikeVoteSelector: (postNr: PostNr, ps: { byMe?: boolean } = {}): string => {
         // Embedded comments pages lack the orig post — instead, there's the
         // blog post, on the embedding page.
         const startSelector = this.#isOnEmbeddedCommentsPage && postNr === c.BodyNr
             ? '.dw-ar-t > ' :`#post-${postNr} + `;
         let result = startSelector + '.esPA .dw-a-like';
-        if (ps.byMe) result += '.dw-my-vote'
+        if (ps.byMe) result += '.dw-my-vote';
+        else if (ps.byMe === false)  result += ':not(.dw-my-vote)';
         return result;
       },
 
@@ -5141,12 +5152,12 @@ export class TyE2eTestBrowser {
         return this.topic.isPostLiked(postNr, { byMe: true });
       },
 
-      isPostLiked: (postNr: PostNr, ps: { byMe?: true } = {}) => {
+      isPostLiked: (postNr: PostNr, ps: { byMe?: boolean } = {}) => {
         const likeVoteSelector = this.topic.makeLikeVoteSelector(postNr, ps);
         return this.isVisible(likeVoteSelector);
       },
 
-      waitForLikeVote: (postNr: PostNr, ps: { byMe?: true } = {}) => {
+      waitForLikeVote: (postNr: PostNr, ps: { byMe?: boolean } = {}) => {
         const likeVoteSelector = this.topic.makeLikeVoteSelector(postNr, ps);
         this.waitForVisible(likeVoteSelector);
       },
@@ -6876,8 +6887,7 @@ export class TyE2eTestBrowser {
 
         switchToWaiting: () => {
           this.waitAndClick(this.adminArea.users.waitingUsersTabSelector);
-          this.waitForVisible('.e_WaitingUsersIntro');
-          this.adminArea.users.waitForLoaded();
+          this.adminArea.users.waiting.waitUntilLoaded();
         },
 
         isWaitingTabVisible: () => {
@@ -6916,6 +6926,11 @@ export class TyE2eTestBrowser {
 
         waiting: {
           undoSelector: '.e_UndoApprRjctB',
+
+          waitUntilLoaded: () => {
+            this.waitForVisible('.e_WaitingUsersIntro');
+            this.adminArea.users.waitForLoaded();
+          },
 
           approveFirstListedUser: () => {
             this.waitAndClickFirst('.e_ApproveUserB');
@@ -7687,7 +7702,7 @@ export class TyE2eTestBrowser {
           }
 
           // Only in the title text, not body text.
-          const titlePend = data.willBePendingApproval ? "(Title pending approval)\n" : '';
+          const titlePend = data.willBePendingApproval ? "Page pending approval\n" : '';
 
           if (data.matchAfter !== false && data.titleMatchAfter !== false) {
             // if (data.titleMatchAfter)

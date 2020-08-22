@@ -70,7 +70,7 @@ object NotificationType {
   // 202: edits requested
   // 203: post rejected
 
-  // 300-399 Notifications about new posts (that are visible, not hidden waiting for review).
+  // 300-399 Notifications about new posts (that are visible, not hidden waiting for approval).
   case object DirectReply extends NotificationType(301)
   case object Mention extends NotificationType(302)
   // + Quote
@@ -81,12 +81,18 @@ object NotificationType {
 
   // 400-499 Something interesting happened with an already existing topic or post.
   case object PostTagged extends NotificationType(406)
+  // + PostEdited
   // + TopicProgress
   // + QuestionAnswered
   // + TopicDone
   // + TopicClosed
 
-  // 700: about users?
+  case object OneLikeVote extends NotificationType(501)
+  // What about WrongVote, OffTopic, Unwanted?
+  // Not so interesting? Could cause flame wars?
+
+
+  // > 1000: about users?
   // - New user joined (staff can then send a friendly Hello message)
   // - User joined/left a group one manages
   // - User got auto blocked, posted bad things
@@ -101,6 +107,7 @@ object NotificationType {
     case Message.IntValue => Message
     case NewPost.IntValue => NewPost
     case PostTagged.IntValue => PostTagged
+    case OneLikeVote.IntValue => OneLikeVote
     case _ => return None
   })
 }
@@ -120,7 +127,10 @@ sealed abstract class Notification {
 
 object Notification {
 
-  /** A reply, @mention, or new post in a topic you're watching.
+  QUICK; CLEAN_UP; RENAME; // to  Notification.AboutPost  not NewPost
+  /** A notification about a post. Could be a reply to you, a @mention of you,
+    * or a new post in a topic you're watching,
+    * or a post of yours got Like voted or tagged.
     */
   case class NewPost(  // [exp] fine, del from db: delete:  page_id  action_type  action_sub_id
     notfType: NotificationType,
@@ -135,13 +145,6 @@ object Notification {
     override def tyype: NotificationType = notfType
   }
 
-  /*
-  case class Approved extends Notification
-  case class Quote extends Notification
-  case class Edit extends Notification
-  case class LikeVote extends Notification
-  case class WrongVote extends Notification
-  case class OffTopicVote extends Notification */
 }
 
 
@@ -150,10 +153,11 @@ sealed abstract class NotificationToDelete
 
 object NotificationToDelete {
 
-  case class MentionToDelete(
+  case class ToOneMember(
     siteId: SiteId,
     uniquePostId: PostId,
-    toUserId: UserId) extends NotificationToDelete
+    toUserId: UserId,
+    notfType: NotificationType) extends NotificationToDelete
 
   case class NewPostToDelete(
     siteId: SiteId,

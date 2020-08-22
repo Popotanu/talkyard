@@ -94,7 +94,7 @@ sealed abstract class ThreatLevel(val IntVal: Int) {
   def isThreat: Boolean = toInt >= MildThreat.toInt
 }
 
-object ThreatLevel {
+object ThreatLevel {  RENAME // to RiskLevel?  s/Threat/Risk/g
 
   case object SuperSafe extends ThreatLevel(1)
 

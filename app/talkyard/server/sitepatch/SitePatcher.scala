@@ -1017,7 +1017,7 @@ case class SitePatcher(globals: debiki.Globals) {
           // via /-/v0/upsert-simple.
           notfGenerator.generateForNewPost(
                 dao.newPageDao(post.pageId, tx), post,
-                sourceAndHtml = None, anyReviewTask = None)
+                sourceAndHtml = None, anyNewModTask = None)
         }
 
         // Group chats, direct messages:
