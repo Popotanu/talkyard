@@ -323,7 +323,7 @@ function runAllE2eTests {
   $r s/wdio --only settings-toggle-login-required.3browsers $args
   $r s/wdio --only login-required-oauth-signup-login $args
 
-  # Moderation   # RENAME to  modn- ...  instead of  admin- ...
+  # Moderation   # RENAME to  modn- ...  instead of  admin- ...and MOVE to (4862065) below?
   $r s/wdio --only settings-approve-members.2browsers $args
   $r s/wdio --only admin-user-approve-reject.2browsers $args
   $r s/wdio --only admin-user-staff.2browsers $args
@@ -337,6 +337,41 @@ function runAllE2eTests {
   $r s/wdio --only modn-review-after.2browsers $args
   $r s/wdio --only modn-appr-bef-comb-w-revw-aftr.2browsers $args
   $r s/wdio --only mod-review.2browsers $args  # RENAME to modn-by-moderator-not-admin
+
+
+  # TESTS_MISSING
+  #$r s/wdio --only modn-on-page-approve-before.2browsers $args
+  # new member posts new topic. Mons approves on page, Modya approves & rejects from modn page.
+  # new member posts new reply. Mons rejects on page, Modya approves & rejects from modn page.
+  # new member posts new reply. Modya approves from mod page, Mons approves & rejects on page.
+  # new member posts new reply. Modya rejects from mod page, Mons approves & rejects on page.
+
+  #$r s/wdio --only modn-on-page-review-after.2browsers $args
+  # new member posts new topic. Mons replies, Modya approves & rejects from modn page.
+  #                             Mons edits, after replied.
+  # new member posts new reply. Mons edits, Modya approves & rejects from modn page.
+  #                             Mons replies, after edited.
+  # new member posts new reply. Modya approves from mod page, Mons replies & edits.
+  # new member posts new reply. Modya rejects from mod page, Mons replies & edits.
+
+  #$r s/wdio --only mod-task-emails-approve-before.2browsers $args
+  # new member posts new topic, mentions Alice and Adam & Memah.
+  #    Alice & Adam get mod task emails: approve-before.
+  #    Alice approves.
+  #    Adam & Memah get @mention notfs — but not Alice.  Bug just fixed  [306RDL@4]
+
+  #$r s/wdio --only mod-task-emails-review-after.2browsers $args
+  # new member posts new topic, mentions Alice and Adam & Memah.
+  #    Alice & Adam get mod task emails: review-after.
+  #    Memah get a @mention notfs — directly.
+  #    Alice okays.
+  #    Memah visits reply — sees it.
+  # new member posts reply, mentions Alice and Adam & Memah.
+  #    Alice & Adam get mod task emails: review-after.
+  #    Memah get a @mention notfs — directly.
+  #    Alice deletes.
+  #    Memah visits reply — not found.
+
 
   $r s/wdio --only admin-move-hostname.2browsers $args
 
@@ -392,12 +427,14 @@ function runAllE2eTests {
 
   $r s/wdio --only notfs-mark-seen-as-seen.2browsers $args  # RENAME append -automatically
 
+  # RENAME these to  modn-... ,  and MOVE to (4862065) below?
   $r s/wdio --only new-user-review-ok.2browsers $args
   #$r s/wdio --only new-user-review-bad.2browsers $args
   $r s/wdio --only new-member-allow-approve.2browsers $args
   #$r s/wdio --only new-member-allow-reject.2browsers $args
   $r s/wdio --only review-edits-ninja-late.2browsers $args
 
+  # MOVE to (4862065) below?
   $r s/wdio --only spam-basic-local.2browsers $args
   $r s/wdio --only spam-basic-local-ip-links-unblock.2browsers $args
   $r s/wdio --only spam-basic-safe-browsing-api-blocked.2browsers $args
@@ -436,6 +473,10 @@ function runAllE2eTests {
   $r s/wdio --only permissions-edit-wiki-posts.2browsers $args
 
   $r s/wdio --only slow-3g-navigate-edit-drafts.2browsers $args
+
+
+  # Moderation   (4862065)
+  # ------------
 
 
   # API

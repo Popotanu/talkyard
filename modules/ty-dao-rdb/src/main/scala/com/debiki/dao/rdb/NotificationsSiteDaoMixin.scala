@@ -59,8 +59,9 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
       insert into notifications3(
         SITE_ID, notf_id, CREATED_AT, NOTF_TYPE,
         UNIQUE_POST_ID, PAGE_ID, ACTION_TYPE, ACTION_SUB_ID,
-        BY_USER_ID, TO_USER_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        BY_USER_ID, TO_USER_ID,
+        email_id, email_status, seen_at)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
 
@@ -75,6 +76,9 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
         values += NullInt //
         values += postNotf.byUserId.asAnyRef
         values += postNotf.toUserId.asAnyRef
+        values += postNotf.emailId.orNullVarchar
+        values += postNotf.emailStatus.toInt.asAnyRef  // [306RDL@4]
+        values += postNotf.seenAt.orNullTimestamp
     }
 
     db.update(sql, values.toList)

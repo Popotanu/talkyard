@@ -97,8 +97,11 @@ case class NotfHtmlRenderer(siteDao: SiteDao, anyOrigin: Option[String]) {
         val anyHtmlNotf = notf match {
           case newPostNotf: Notification.NewPost =>
             postsById.get(newPostNotf.uniquePostId) map { post =>
-              val pageTitle = pageStuffById.get(post.pageId).map(_.title).getOrElse(
-                "No title [EsM7YKF2]")
+              // If title not yet approved, this notf is to staff, about a new
+              // topic for them to approve. It's ok, then, to incl an unapproved title.
+              val anyPageStuff = pageStuffById.get(post.pageId)
+              val pageTitle = anyPageStuff.flatMap(_.titleMaybeUnapproved).getOrElse(
+                    "No title [TyE2S7YKF2]")
 
               if (notf.tyype == NotificationType.NewPostReviewTask) {
                 newModTasks = true
