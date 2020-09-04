@@ -26,7 +26,7 @@ import javax.inject.Inject
 import play.api.libs.json._
 import play.api.mvc
 import play.api.mvc.{Action, ControllerComponents}
-import talkyard.server.JsX.{JsPageMetaBrief, JsUser}
+import talkyard.server.JsX.{JsEmptyObj, JsPageMetaBrief, JsUser}
 
 
 /** Lists posts for the moderation page, and approves/rejects/deletes posts
@@ -90,8 +90,8 @@ class ModerationController @Inject()(cc: ControllerComponents, edContext: EdCont
 
   def moderateFromPage: Action[JsValue] = StaffPostJsonAction(maxBytes = 100) { request =>
     import request.{dao, body}
-
-    TESTS_MISSING
+CR_DONE
+    TESTS_MISSING //  [065AKDLU35]
     val postId = (body \ "postId").as[PostId]
     val postRevNr = (body \ "postRevNr").as[Int]
     val decisionInt = (body \ "decision").as[Int]
@@ -103,7 +103,7 @@ class ModerationController @Inject()(cc: ControllerComponents, edContext: EdCont
           s"That decision not allowed here: $decision")
 
     val patchJson = dao.writeTx { (tx, staleStuff) =>
-      val modResult = dao.moderatePostInstantly(postId, postRevNr = postRevNr,
+      val modResult = dao.moderatePostInstantly(postId = postId, postRevNr = postRevNr,
             decision, moderator = request.theRequester)
 
       if (modResult.updatedPosts.nonEmpty) {
@@ -116,7 +116,7 @@ class ModerationController @Inject()(cc: ControllerComponents, edContext: EdCont
       }
       else {
         // Need not update anything browser side.
-        JsNull
+        JsEmptyObj
       }
     }
 

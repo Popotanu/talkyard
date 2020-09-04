@@ -111,7 +111,7 @@ describe("new member, allow, approve posts:  TyT4AKBJ20", () => {  // RENAME ths
         idAddress.id, owen.emailAddress, topics.majasTopicText, owensBrowser);
   });
 
-  it("Maja can edit the text, although not yet approved", () => {
+  it("Maja can edit the text, although not yet approved  TyTE2E306RKP", () => {
     majasBrowser.complex.editPageBody(topics.majasTopicTextEdited);
   });
 
@@ -119,7 +119,7 @@ describe("new member, allow, approve posts:  TyT4AKBJ20", () => {  // RENAME ths
     majasBrowser.complex.editPageTitle(topics.majasTopicTitleEdited);
 });
 
-  it("... changes visible after reload", () => {
+  it("... changes visible after reload  TyTE2E042RT", () => {
     majasBrowser.refresh();
     majasBrowser.assertPageTitleMatches(topics.majasTopicTitleEdited);
     majasBrowser.assertPageBodyMatches(topics.majasTopicTextEdited);

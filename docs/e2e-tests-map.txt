@@ -140,21 +140,6 @@ navigation:
           - navigation-as-admin.test.ts  TyT7WAAR2J4
           - embedded-comments-navigation-as-guest.test.ts  TyT2P067WKT2
 
-moderation,
-review,
-unapproved comments -
-          - new-member-allow-approve.2browsers.test.ts  TyT4AKBJ20
-          - admin-review-cascade-approval.2browsers.test.ts  TyT0SKDE24
-  embedded + not-embedded -
-    see own, not others:
-    edit own:
-    may not post too many:
-    may continue after approved:
-    staff sees all:
-    staff can edit:
-    staff can approve:  (2WY0)
-    staff can delete:
-
 profile page, user:
   upload photo:  (8PK2)
   edit full name:
@@ -744,13 +729,13 @@ admin -
           - many-users-mention-list-join-group.2browsers.test.ts   TESTS_MISSING  TyT60295KTDT
 
 moderation,
-review posts,
-reviews - [TyT5DKW7U]
+approve before,
+review after:
     ninja edits,
     normal edits,
     late edits
             - review-edits-ninja-late.2browsers.test.ts  TyTREVWEDTLATE.TyTLADEETD01 .TyTNINJED02
-    gets emailed about review tasks:  (502M7)
+    gets emailed about mod tasks:  (502M7)
           - new-member-allow-approve.2browsers.test.ts  TyT4AKBJ20
           - new-user-review-ok.2browsers.test.ts  TyT39657MRDT2
     #no skip this?:
@@ -758,7 +743,7 @@ reviews - [TyT5DKW7U]
     see spam below: (4BKS0)
     delete flagged:   — also see (6JS3)
     clear flag:   — also see (6JS3)
-    approve posts:  (2WY0)
+    approve posts:
       - admin-user-threat-mild.2browsers.test.ts  [TyT2WKBG4Z]
       - admin-user-threat-moderate.2browsers.test.ts  [TyT5KHFIQ20]
     undoReviewDecision: [4JKWWD4]
@@ -801,6 +786,13 @@ reviews - [TyT5DKW7U]
           - FirstPostsAppSpec.scala  TyTIT205RKDJ4
           - modn-appr-bef-comb-w-revw-aftr.2browsers.test.ts  TyTE2E05RKD3
           - NotfsAppMentionsSpec.scala  TyTIT50267MT
+  require approval before:
+    see own, not others:
+          - new-member-allow-approve.2browsers.test.ts  TyT4AKBJ20.TyTE2E042RT
+    edit own:
+          - new-member-allow-approve.2browsers.test.ts  TyT4AKBJ20.TyTE2E306RKP
+    staff can edit:
+          - TESTS_MISSING [065AKDLU35]
   require approval before, if trust less than:
           - modn-approve-before.2browsers.test.ts  TyTE2E52RKDHI
           - modn-appr-bef-comb-w-revw-aftr.2browsers.test.ts  TyTE2E05RKD3
@@ -811,6 +803,8 @@ reviews - [TyT5DKW7U]
   hide completed review tasks:
           - modn-review-after.2browsers.test.ts  TyTE2E402GRM.TyT05KD2SM1
           - modn-approve-before.2browsers.test.ts  TyTE2E52RKDHI.TyT05KD2SM1
+
+  moderate on page:  TESTS_MISSING  [065AKDLU35]
 
 
 spam: (4BKS0)
@@ -919,7 +913,7 @@ restart server -
 
 notfs,
 notifications:
-  about review tasks:   — see (502M7)
+  about mod tasks:   — see (502M7)
   about direct messages:
           - direct-messages-notfs.3browsers.test.ts  TyT602RKDL42
           - direct-messages-delete.2browsers.test.ts  TyT603KDTP74
@@ -987,7 +981,7 @@ email notifications:  (5ABKR024)
   #no skip this?:
   #to new members when their posts approved:  see (60MR2)
   #        - TESTS_MISSING  TyT4AKBJ20.TyTE2E062KR
-  to staff about review tasks:  (502M7)
+  to staff about mod tasks:  (502M7)
           - new-member-allow-approve.2browsers.test.ts  TyT4AKBJ20
           - new-user-review-ok.2browsers.test.ts  TyT39657MRDT2
   watching everything:
