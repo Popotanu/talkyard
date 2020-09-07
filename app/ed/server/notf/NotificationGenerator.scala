@@ -131,24 +131,28 @@ case class NotificationGenerator(
         s"appr.HtmlSan.: ${newPost.approvedHtmlSanitized}, safeHtml: ${textAndHtml.safeHtml} [TyE9FJB0]")
     }
 
-    // Direct reply notification.
+    val ancestorsParentFirst = page.parts.ancestorsParentFirstOf(newPost)
+    val anyParent = page.parts.parentOf(newPost)
+    dieIf(ancestorsParentFirst.headOption != anyParent, "TyE395RSKT")
+
+    // Direct and indirect reply notification.
+    val anyParentPost = ancestorsParentFirst.headOption
     for {
-      replyingToPost <- page.parts.parentOf(newPost)
+      replyingToPost <- ancestorsParentFirst
       if replyingToPost.createdById != newPost.createdById // not replying to oneself
       if approverId != replyingToPost.createdById // the approver has already read newPost
       replyingToUser <- tx.loadParticipant(replyingToPost.createdById)
     } {
+      val isParent = anyParentPost.is(replyingToPost)
+      val notfType =
+            if (isParent) NotificationType.DirectReply
+            else NotificationType.IndirectReply
       // (If the replying-to-post is by a group (currently cannot happen), and someone in the group
       // replies to that group, then hen might get a notf about hens own reply. Fine, not much to
       // do about that.)
       makeAboutPostNotfs(
-            NotificationType.DirectReply, newPost, inCategoryId = page.categoryId,
-            replyingToUser)
+            notfType, newPost, inCategoryId = page.categoryId, replyingToUser)
     }
-
-    // Later: Indirect reply notifications.
-    NotfLevel.Normal // = notifies about replies in one's sub threads (not implemented)
-    NotfLevel.Hushed // = notifies only about direct replies
 
     def notfCreatedAlreadyTo(userId: UserId) =
       generatedNotifications.toCreate.map(_.toUserId).contains(userId)
@@ -453,8 +457,10 @@ case class NotificationGenerator(
       val notfLevels = tx.loadPageNotfLevels(toUserId, newPost.pageId, inCategoryId)
       val usersMoreSpecificLevel =
         notfLevels.forPage.orElse(notfLevels.forCategory).orElse(notfLevels.forWholeSite)
-      val shallNotify = usersMoreSpecificLevel isNot NotfLevel.Muted
-      if (shallNotify) {
+      val skipBecauseMuted = usersMoreSpecificLevel is NotfLevel.Muted
+      val skipBecauseHushed = (usersMoreSpecificLevel is NotfLevel.Hushed) &&
+              notfType == NotificationType.IndirectReply
+      if (!skipBecauseMuted && !skipBecauseHushed) {
         sentToUserIds += toUserId
         notfsToCreate += Notification.NewPost(
               notfType,

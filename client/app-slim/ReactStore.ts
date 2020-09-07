@@ -1726,7 +1726,9 @@ function watchbar_handleNotification(watchbar: Watchbar, notf: Notification) {
       watchbar[WatchbarSection.DirectMessages].unshift(notf_toWatchbarTopic(notf));
     }
   }
-  if (notf.type === NotificationType.DirectReply || notf.type === NotificationType.Mention) {
+  if (notf.type === NotificationType.DirectReply
+        || notf.type === NotificationType.IndirectReply
+        || notf.type === NotificationType.Mention) {
     // Fix later. Like so?
     // If topic not in watchbar, add it to the appropriate section (chat, messages, or recent).
     // Then bump the notfsToMe or notfsToMany count, for the WatchbarTopic,

@@ -610,7 +610,7 @@ object RdbUtil {
 
     import NotificationType._
     notfType match {
-      case NewPostReviewTask | DirectReply | Mention | Message |
+      case NewPostReviewTask | DirectReply | IndirectReply | Mention | Message |
            NewPost | PostTagged | OneLikeVote =>
         Notification.NewPost(
           id = notfId,

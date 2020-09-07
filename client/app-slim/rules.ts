@@ -127,6 +127,7 @@ export function user_isStaffOrCoreMember(user: Myself | UserInclDetails): boolea
 
 export function isTalkToMeNotification(notf: Notification): boolean {
   return notf.type === NotificationType.DirectReply ||
+          notf.type === NotificationType.IndirectReply ||
           notf.type === NotificationType.Mention ||
           notf.type === NotificationType.Message ||
           notf.type === NotificationType.OneLikeVote;  // for now  [like_notf_ico]

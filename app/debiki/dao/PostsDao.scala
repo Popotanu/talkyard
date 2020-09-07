@@ -2226,7 +2226,7 @@ trait PostsDao {
           // Upvoting a post shouldn't affect its ancestors, because they're on the
           // path to the interesting post so they are a bit useful/interesting. However
           // do mark all earlier siblings as read since they weren't upvoted (this time).
-          val ancestorNrs = page.parts.ancestorsOf(postNr).map(_.nr)
+          val ancestorNrs = page.parts.ancestorsParentFirstOf(postNr).map(_.nr)
           postNrsRead -- ancestorNrs.toSet
         }
         else {
@@ -2316,7 +2316,7 @@ trait PostsDao {
       // Don't create cycles.
       TESTS_MISSING // try to create a cycle?
       if (newParentPost.pageId == postToMove.pageId) {
-        val ancestorsOfNewParent = fromPage.parts.ancestorsOf(newParentPost.nr)
+        val ancestorsOfNewParent = fromPage.parts.ancestorsParentFirstOf(newParentPost.nr)
         if (ancestorsOfNewParent.exists(_.id == postToMove.id))
           throwForbidden("EsE7KCCL_", o"""Cannot move a post to after one of its descendants
               — doing that, would create a cycle""")

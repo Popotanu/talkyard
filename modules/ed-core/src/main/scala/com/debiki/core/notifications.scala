@@ -72,6 +72,7 @@ object NotificationType {
 
   // 300-399 Notifications about new posts (that are visible, not hidden waiting for approval).
   case object DirectReply extends NotificationType(301)
+  case object IndirectReply extends NotificationType(306)
   case object Mention extends NotificationType(302)
   // + Quote
   case object Message extends NotificationType(304)
@@ -103,6 +104,7 @@ object NotificationType {
   def fromInt(value: Int): Option[NotificationType] = Some(value match {
     case NewPostReviewTask.IntValue => NewPostReviewTask
     case DirectReply.IntValue => DirectReply
+    case IndirectReply.IntValue => IndirectReply
     case Mention.IntValue => Mention
     case Message.IntValue => Message
     case NewPost.IntValue => NewPost
@@ -233,6 +235,14 @@ object NotfLevel {
   /** Like Normal, plus highlights the topic in the topic list, if new posts.
     */
   case object Tracking extends NotfLevel(4)  ; RENAME // to Highlight ?
+
+  /** Notified of @mentions and posts in one's sub threads (incl direct replies),
+    * *and* other people's replies to the posts one has replied to oneself
+    * — because replying to something, indicates one is curious? about that
+    * topic (or sub-topic) and then, can be nice to hear other people's
+    * thoughts about that topic too.
+    */
+  // case object Curious extends NotfLevel(4)   // COULD  + bump all >= 4 numbers to += 1
 
   /** Notified of @mentions and posts in one's sub threads (incl direct replies).
     */

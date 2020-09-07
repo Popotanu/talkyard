@@ -110,6 +110,7 @@ case class NotfHtmlRenderer(siteDao: SiteDao, anyOrigin: Option[String]) {
                 newMessagesToYou = true
               }
               else if (notf.tyype == NotificationType.DirectReply
+                    || notf.tyype == NotificationType.IndirectReply
                     || notf.tyype == NotificationType.Mention) {
                 newRepliesOrMentions = true
               }
@@ -213,6 +214,8 @@ case class NotfHtmlRenderer(siteDao: SiteDao, anyOrigin: Option[String]) {
         ("You have been mentioned", ",", "in a post written by", "e_NfEm_Mentn")
       case NotificationType.DirectReply =>
         ("You have a reply", ",", "written by", "e_NfEm_Re")
+      case NotificationType.IndirectReply =>
+        ("You have an indirect reply", ",", "written by", "e_NfEm_Re")
       case NotificationType.NewPost =>
         if (post.nr == PageParts.BodyNr)
           ("A new topic has been started", ",", "by", "e_NfEm_NwPg")

@@ -299,13 +299,21 @@ abstract class PageParts {
 
 
   def depthOf(postNr: PostNr): Int =
-    ancestorsOf(postNr).length
+    ancestorsParentFirstOf(postNr).length
 
 
-  /** Ancestors, starting with postId's parent. Dies if cycle. */
-  def ancestorsOf(postNr: PostNr): List[Post] = {   COULD_OPTIMIZE // change to ArrayBuffer + Vector
-    var ancestors: List[Post] = Nil
-    var curPost: Option[Post] = Some(thePostByNr(postNr))
+  /** Starts with postNr's parent. Dies if cycle. */
+  def ancestorsParentFirstOf(postNr: PostNr): immutable.Seq[Post] = {
+    postByNr(postNr) match {
+      case None => Nil
+      case Some(p) => ancestorsParentFirstOf(p)
+    }
+  }
+
+
+  def ancestorsParentFirstOf(post: Post): immutable.Seq[Post] = {
+    val ancestors = mutable.ArrayBuffer[Post]()
+    var curPost: Option[Post] = Some(post)
     var numLaps = 0
     while ({
       curPost = parentOf(curPost.get)
@@ -316,9 +324,9 @@ abstract class PageParts {
       // To mostly avoid O(n^2) time, don't check for cycles so very often. [On2]
       dieIf((numLaps % 1000) == 0 && ancestors.exists(_.nr == theCurPost.nr),
         "EsE7YKW2", s"Post cycle on page $pageId around post nr ${theCurPost.nr}")
-      ancestors ::= theCurPost
+      ancestors.append(theCurPost)
     }
-    ancestors.reverse
+    ancestors.to[immutable.Seq]
   }
 
 
@@ -337,10 +345,11 @@ abstract class PageParts {
     }
 
     val firstPost = thePostByNr(postNrs.head)
-    var commonAncestorNrs: Seq[PostNr] = firstPost.nr :: ancestorsOf(firstPost.nr).map(_.nr)
+    var commonAncestorNrs: Seq[PostNr] =
+          firstPost.nr :: ancestorsParentFirstOf(firstPost.nr).map(_.nr).toList
     for (nextPostNr <- postNrs.tail) {
       val nextPost = thePostByNr(nextPostNr)
-      var ancestorNrs = nextPost.nr :: ancestorsOf(nextPost.nr).map(_.nr)
+      var ancestorNrs = nextPost.nr :: ancestorsParentFirstOf(nextPost.nr).map(_.nr).toList
       var commonAncestorFound = false
       postNrsVisited.clear()
       while (ancestorNrs.nonEmpty && !commonAncestorFound) {
