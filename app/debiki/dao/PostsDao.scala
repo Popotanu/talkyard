@@ -98,9 +98,9 @@ trait PostsDao {
 
     val storePatchJson = jsonMaker.makeStorePatch(newPost, author, showHidden = true)
 
-    // But only if approved?  Or notify staff members
+    // (If reply not approved, this'll send mod task notfs to staff [306DRTL3])
     pubSub.publish(StorePatchMessage(siteId, pageId, storePatchJson, notifications),
-      byId = author.id)
+          byId = author.id)
 
     InsertPostResult(storePatchJson, newPost, anyReviewTask)
   }
@@ -290,9 +290,10 @@ trait PostsDao {
     anyReviewTask.foreach(tx.upsertReviewTask)
     anySpamCheckTask.foreach(tx.insertSpamCheckTask)
 
-    // If staff has now read and replied to the parent pos — then resolve any
+    // If staff has now read and replied to the parent post — then resolve any
     // mod tasks about the parent post. So they won't need to review this post twice,
     // on the Moderation page too.
+    TESTS_MISSING  // TyTE2EMRHK35
     if (author.isStaff) {
       bugWarnIf(anyReviewTask.isDefined || anySpamCheckTask.isDefined, "TyE05RKD5")
       replyToPosts foreach { replyToPost =>
@@ -438,13 +439,14 @@ trait PostsDao {
       numFirstToRevwAftr = 2 - numFirstToApprove
     }
 
-    // What if there're already approved posts by this user, but without any
+    // ( What if there're already approved posts by this user, but without any
     // mod tasks?  [aprd_posts_wo_mod_tasks]
     // E.g. because posts by this user were inserted via the API, or because
     // moderator settings were recently changed.
     // Would mods then want to start moderating this user, although hen
     // has been a member for a while & posted topics and replies already?
     // Maybe sometimes yes, sometimes no.
+    // Currently they will start moderating hen. )
 
     if (numFirstToApprove > 0 || numFirstToRevwAftr > 0) {
       val numFirstPending = reviewTasksOldestFirst.count(_.decision.isEmpty)
@@ -574,7 +576,8 @@ trait PostsDao {
               // was likely not intended directly for them).  TyT306WKCDE4 [NEXTCHATMSG]
               textAndHtml.usernameMentions.isEmpty =>
           // No mod task generated. [03RMDl6J]
-          // For now, let's create mod tasks only for new messages.
+          // For now, let's create mod tasks only for *new* messages
+          // (but not appended-to messages).
           // Should work well enough + won't be too many mod tasks.
           appendToLastChatMessage(
                 lastMessage, textAndHtml, byWho, spamRelReqStuff, tx, staleStuff)
@@ -913,12 +916,12 @@ trait PostsDao {
         }
         else if (editor.isStaff) {
           if (!postToEdit.isSomeVersionApproved) {
-            // Staff won't approve a not yet unapproved post, just by editing it.
+            // Staff won't approve a not yet approved post, just by editing it.
             // Instead, they need to click a button to explicitly approve it  [in_pg_apr]
-            // the first time (for that post).  (Or do via the Moderation page).
-            // (Partly because it'd be *complicated* to both approve and publish
+            // the first time (for that post),  or do via the Moderation page.
+            // (This partly because it'd be *complicated* to both approve and publish
             // the post, *and* handle edits, at the same time.)
-            TESTS_MISSING
+            TESTS_MISSING // [065AKDLU35]
             None
           }
           else {
@@ -1288,11 +1291,6 @@ trait PostsDao {
 
     val pageIdsLinkedAfter = tx.loadPageIdsLinkedFromPage(post.pageId)
 
-    WOULD_OPTIMIZE // use Guava.symmetricDifference.  But not Scala's  setA.diff.setB.
-    val stalePageIds =
-      (pageIdsLinkedBefore -- pageIdsLinkedAfter) ++
-        (pageIdsLinkedAfter -- pageIdsLinkedBefore)
-
     // Uncache backlinked pages. [uncache_blns]
     if (post.isTitle) {
       // Then all linked pages need to update their backlinks to this post's page
@@ -1304,6 +1302,10 @@ trait PostsDao {
             pageIdsLinkedBefore, pageModified = false, backlinksStale = true)
     }
     else {
+      WOULD_OPTIMIZE // use Guava.symmetricDifference.  But not Scala's  setA.diff.setB.
+      val stalePageIds =
+            (pageIdsLinkedBefore -- pageIdsLinkedAfter) ++
+              (pageIdsLinkedAfter -- pageIdsLinkedBefore)
       staleStuff.addPageIds(stalePageIds, pageModified = false, backlinksStale = true)
     }
   }
@@ -1658,6 +1660,7 @@ trait PostsDao {
         throwForbidden("DwE5JKF7", "You may not modify the whole tree")
     }
 
+CR_DONE // to here, continue below!
     if (postBefore.isDeleted) {
       val isUnhidingPostBody = action == PSA.UnhidePost
       val isChangingDeletePostToDeleteTree =

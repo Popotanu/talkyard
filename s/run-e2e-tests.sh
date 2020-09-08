@@ -346,10 +346,10 @@ function runAllE2eTests {
   # new member posts new reply. Modya approves from mod page, Mons approves & rejects on page.
   # new member posts new reply. Modya rejects from mod page, Mons approves & rejects on page.
 
-  #$r s/wdio --only modn-on-page-review-after.2browsers $args
-  # new member posts new topic. Mons replies, Modya approves & rejects from modn page.
+  #$r s/wdio --only modn-on-page-review-after.2browsers $args  TyTE2EMRHK35
+  # new member posts new topic. Mons replies (review-okays implicitly), Modya approves & rejects from modn page.
   #                             Mons edits, after replied.
-  # new member posts new reply. Mons edits, Modya approves & rejects from modn page.
+  # new member posts new reply. Mons edits (review-okays implicitly), Modya approves & rejects from modn page.
   #                             Mons replies, after edited.
   # new member posts new reply. Modya approves from mod page, Mons replies & edits.
   # new member posts new reply. Modya rejects from mod page, Mons replies & edits.
@@ -406,7 +406,7 @@ function runAllE2eTests {
   $r s/wdio --only notfs-like-votes.2browsers $args
   $r s/wdio --only notfs-mark-all-as-read.2browsers $args  # REANME append -manually
   $r s/wdio --only notfs-snooze-talk.2browsers $args
-  $r s/wdio --only notf-override-group-prefs.2browsers $args
+# $r s/wdio --only notf-override-group-prefs.2browsers $args  !!
   $r s/wdio --only notfs-prefs-inherit-own.2browsers $args
   $r s/wdio --only notfs-prefs-inherit-group.2browsers $args
   $r s/wdio --only notf-prefs-custom-groups.2browsers $args
