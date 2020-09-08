@@ -41,13 +41,17 @@
   &.esNotf-toMe
     [class^=icon-],
     [class*= icon-]
-      background: hsl($uiHue, 85%, 47%);
+      background: hsl($uiHue 95% 45%);
 
   // But remove colors if the notf has been seen already
   &.esNotf-seen
     [class^=icon-],
     [class*= icon-]
       background: hsl(0, 0%, 73%);
+
+  // Indirect replies are in between.
+  .s_IndirRe:not(.esNotf-seen) .icon-reply
+    background: hsl($uiHue 85% 62%);
 
 
 .esNotf

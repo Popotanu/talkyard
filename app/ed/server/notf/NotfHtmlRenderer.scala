@@ -110,7 +110,6 @@ case class NotfHtmlRenderer(siteDao: SiteDao, anyOrigin: Option[String]) {
                 newMessagesToYou = true
               }
               else if (notf.tyype == NotificationType.DirectReply
-                    || notf.tyype == NotificationType.IndirectReply
                     || notf.tyype == NotificationType.Mention) {
                 newRepliesOrMentions = true
               }
@@ -118,6 +117,7 @@ case class NotfHtmlRenderer(siteDao: SiteDao, anyOrigin: Option[String]) {
                 newLikeVotes = true
               }
               else if (notf.tyype == NotificationType.NewPost
+                    || notf.tyype == NotificationType.IndirectReply
                     || notf.tyype == NotificationType.PostTagged) {
                 if (post.isOrigPost) newTopics = true
                 else newPosts = true

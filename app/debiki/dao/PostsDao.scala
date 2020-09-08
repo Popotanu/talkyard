@@ -2131,7 +2131,7 @@ trait PostsDao {
     BUG; SHOULD // delete notfs or mark deleted?  [notfs_bug]  [nice_notfs]
     // But don't delete any review tasks — good if staff reviews, if a new member
     // posts something trollish, people read/reply/react, then hen deletes hens post.
-    // Later, if undeleting, then restore the notfs?
+    // Later, if undeleting, then restore the notfs? [undel_posts]
 
     // The caller needs to: refreshPageInMemCache(pageId) — and should be done just after tx ended.
     // EDIT: That's soon not needed, use [staleStuff] instead and [rm_cache_listeners].  CLEAN_UP

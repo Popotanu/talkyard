@@ -1449,12 +1449,12 @@ object JsonMaker {
         userIds.append(notf.byUserId)
         import NotificationType._
         if (notf.seenAt.isEmpty) notf.tyype match {
-          case DirectReply | IndirectReply | Mention | Message | OneLikeVote =>
+          case DirectReply | Mention | Message | OneLikeVote =>
             UX // Later, give Like votes their own happy looking color? [like_notf_ico]
             // For now, share info-blud & color with NewPost — an okay nice
             // light blue color, doesn't look urgent.
             numTalkToMe += 1
-          case NewPost =>
+          case NewPost | IndirectReply =>
             numTalkToOthers += 1
           case PostTagged =>
             numOther += 1

@@ -583,7 +583,7 @@ trait PagesDao {
     BUG; SHOULD // delete notfs or mark deleted?  [notfs_bug]  [nice_notfs]
     // But don't delete any review tasks — good if staff reviews, if a new
     // member posts something trollish, people react, then hen deletes hens page.
-    // Later, if undeleting, then restore the notfs?
+    // Later, if undeleting, then restore the notfs? [undel_posts]
 
     val deleter = tx.loadTheParticipant(deleterId)
     if (!deleter.isStaff)

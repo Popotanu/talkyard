@@ -137,22 +137,31 @@ case class NotificationGenerator(
 
     // Direct and indirect reply notification.
     val anyParentPost = ancestorsParentFirst.headOption
-    for {
-      replyingToPost <- ancestorsParentFirst
-      if replyingToPost.createdById != newPost.createdById // not replying to oneself
-      if approverId != replyingToPost.createdById // the approver has already read newPost
-      replyingToUser <- tx.loadParticipant(replyingToPost.createdById)
-    } {
-      val isParent = anyParentPost.is(replyingToPost)
-      val notfType =
-            if (isParent) NotificationType.DirectReply
-            else NotificationType.IndirectReply
-      // (If the replying-to-post is by a group (currently cannot happen), and someone in the group
-      // replies to that group, then hen might get a notf about hens own reply. Fine, not much to
-      // do about that.)
-      makeAboutPostNotfs(
-            notfType, newPost, inCategoryId = page.categoryId, replyingToUser)
+
+    def maybeGenReplyNotf(notfType: NotificationType, ancestorsCloseFirst: Seq[Post])
+          : Unit = {
+      for {
+        replyingToPost <- ancestorsCloseFirst
+        if replyingToPost.createdById != newPost.createdById // not replying to oneself
+        if approverId != replyingToPost.createdById // the approver has already read newPost
+        replyingToUser <- tx.loadParticipant(replyingToPost.createdById)
+      } {
+        val isParent = anyParentPost.is(replyingToPost)
+        val __notfType =
+              if (isParent) NotificationType.DirectReply
+              else NotificationType.IndirectReply
+        // (If the replying-to-post is by a group (currently cannot happen), and someone in the group
+        // replies to that group, then hen might get a notf about hens own reply. Fine, not much to
+        // do about that.)
+        makeAboutPostNotfs(
+              notfType, newPost, inCategoryId = page.categoryId, replyingToUser)
+      }
     }
+
+    // Direct replies have highest precedence.
+    // Say a post is a direct reply, and also @mentions the one it replies to
+    // — then we'll generate a direct reply notf only.
+    maybeGenReplyNotf(NotificationType.DirectReply, anyParentPost.toSeq)
 
     def notfCreatedAlreadyTo(userId: UserId) =
       generatedNotifications.toCreate.map(_.toUserId).contains(userId)
@@ -198,6 +207,12 @@ case class NotificationGenerator(
             userOrGroup)
       }
     }
+
+    // Indirect replies.
+    // If the post @mentions some of those indirectly replied to, then we've won't
+    // generate any indirect reply notfs to theme — they'll get a Mention
+    // notf instead (generated above).
+    maybeGenReplyNotf(NotificationType.IndirectReply, ancestorsParentFirst drop 1)
 
     // People watching this topic or category
     addWatchingSomethingNotfs(page, newPost, pageMemberIds)
