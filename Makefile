@@ -242,7 +242,7 @@ images/web/assets/ext-iframe.js.gz: client/ext-iframe.js
 
 # E.g.:  images/app/assets/translations/en_US/i18n.js  etc.
 transl_dev_bundle_files := \
-  ${shell find translations/ -name '*.ts' | sed -nr 's/(.*)\.ts/images\/app\/assets\/\1\.js/p' }
+  ${shell find translations/ -name '*.ts' | sed -nr 's;(.*)\.ts;images/app/assets/\1.js;p'}
 
 $(transl_dev_bundle_files): ${shell find translations/ -name '*.ts'}
 	@echo "Generating translation files: Transpiling .ts to .js"
